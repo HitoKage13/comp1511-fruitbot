@@ -566,85 +566,12 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_ARRAY_INP
                 j++;
             }
         }
-
-        /* print_sell_efficiency(b,selling,i); */
-    } /* else if (b->fruit == NULL) {
-        while (!(check == prev && flag == 0)) {
-            flag = 0;
-            turnCheck = 2;
-            if (strcmp(b->fruit,check->fruit) == 0 && (check->price < 0 &&
-            check->quantity > 0)) {
-                strcpy(buying[i].fruit,check->fruit);
-                strcpy(buying[i].buyLocation,check->name);
-                buying[i].profit = check->price;
-                route = nearestRoute(prev,check);
-                buying[i].distance = route;
-                if (strcmp(prev->name,buying[i].buyLocation) == 0) {
-                    turnCheck--;
-                } else if (buying[i].distance % b->maximum_move > 0) {
-                    turnCheck++;
-                }
-                buying[i].turns = turnCheck + (buying[i].distance/b->maximum_move);
-                buying[i].efficiency = (buying[i].profit/buying[i].turns)*100;
-                i++;
-            }
-
-            check = check->east;
-        }
-
-        flag = 1;
-
-        while (!(check == prev && flag == 0)) {
-            flag = 0;
-            turnCheck = 2;
-            if (strcmp(b->fruit,check->fruit) == 0 && (check->price < 0 &&
-            check->quantity > 0)) {
-                strcpy(buying[i].fruit,check->fruit);
-                strcpy(buying[i].buyLocation,check->name);
-                buying[i].profit = check->price;
-                route = nearestRoute(prev,check);
-                buying[i].distance = route;
-                if (strcmp(prev->name,buying[i].buyLocation) == 0) {
-                    turnCheck--;
-                } else if (buying[i].distance % b->maximum_move > 0) {
-                    turnCheck++;
-                }
-                buying[i].turns = turnCheck + (buying[i].distance/b->maximum_move);
-                buying[i].efficiency = (buying[i].profit/buying[i].turns)*100;
-                i++;
-            }
-
-            check = check->west;
-        }
-
-        while (j < i - 1 || sortCounter > 0) {
-            if (buying[j].efficiency < buying[j+1].efficiency) {
-                sortHolder[0] = buying[j];
-                buying[j] = buying[j+1];
-                buying[j+1] = sortHolder[0];
-                sortCounter++;
-            }
-
-            if (j == i - 2) {
-                if (sortCounter > 0) {
-                    sortCounter = 0;
-                    j = 0;
-                } else {
-                    break;
-                }
-            } else {
-                j++;
-            }
-        }
-
-        print_buy_efficiency(b,buying,i);
-    } */
+    }
 }
 
 // Prints "Efficiency" for debugging
 void print_efficiency (struct bot *b, struct _efficiency locations[MAX_ARRAY_INPUT + 1], int i) {
     int j = 0;
-    /* while (j < i) { */
         printf("Fruit:              %s\n",locations[j].fruit);
         printf("Profit:             %d\n",locations[j].profit);
         printf("Seller:             %s\n",locations[j].sellLocation);
@@ -690,14 +617,11 @@ void print_efficiency (struct bot *b, struct _efficiency locations[MAX_ARRAY_INP
         }
         printf("Efficiency:         %.1lf\n",locations[j].efficiency);
         printf("\n");
-        /* j++;
-    } */
 }
 
 // Prints "sell efficiency" for debugging
 void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_ARRAY_INPUT + 1], int i) {
     int j = 0;
-    /* while (j < i) { */
         printf("Fruit:              %s\n",selling[j].fruit);
         printf("Profit:             %d\n",selling[j].profit);
         printf("Buyer:              %s\n",selling[j].buyLocation);
@@ -705,23 +629,7 @@ void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_ARRAY_INP
         printf("Dist:               %d\n",selling[j].distance);
         printf("Efficiency:         %.1lf\n",selling[j].efficiency);
         printf("\n");
-        /* j++;
-    } */
 }
-
-/* void print_buy_efficiency (struct bot *b, struct _trading buying[MAX_ARRAY_INPUT + 1], int i) {
-    int j = 0;
-    while (j < i) {
-        printf("Fruit:              %s\n",buying[j].fruit);
-        printf("Profit:             %d\n",buying[j].profit);
-        printf("Seller:              %s\n",buying[j].sellLocation);
-        printf("Turns:              %d\n",buying[j].turns);
-        printf("Dist:               %d\n",buying[j].distance);
-        printf("Efficiency:         %.1lf\n",buying[j].efficiency);
-        printf("\n");
-        j++;
-    }
-} */
 
 // Finds the closest location that can buy "Anything", to get rid
 // of excess fruit.
@@ -1020,92 +928,6 @@ int checkMoves(struct bot *b, int botCounter, struct _efficiency locations[MAX_A
     }
 
     return move;
-
-    /* while (!(eastCheck == current && flag == 0)) {
-        flag = 0;
-        if (b->fruit != NULL) {
-            if (strcmp(b->fruit,eastCheck->fruit) == 0
-            && eastCheck->price > 0) {
-                if (eastCheck->quantity > 0) {
-                    strcpy(selectedFruit,b->fruit);
-                    if (checkValidBuyer(b,selectedFruit) == BUYER) {
-                        break;
-                    } else if (checkValidBuyer(b,selectedFruit) == BUYER_ANYTHING) {
-                        break;
-                    }
-                }
-            } else if (strcmp("Anything",eastCheck->fruit) == 0) {
-                strcpy(selectedFruit,b->fruit);
-                if (checkValidBuyer(b,selectedFruit) == BUYER_ANYTHING) {
-                    break;
-                }
-            }
-        } else if (b->fruit == NULL) {
-            if (strcmp(eastCheck->name,locations[0].sellLocation) == 0) {
-                if (eastCheck->quantity > 0) {
-                    strcpy(selectedFruit,eastCheck->fruit);
-                    if (checkValidBuyer(b,selectedFruit) == BUYER) {
-                        break;
-                    }
-                }
-            }
-        }
-
-        eastCheck = eastCheck->east;
-        eastCounter++;
-    }
-
-    flag = 1;
-
-    while (!(westCheck == current && flag == 0)) {
-        flag = 0;
-        if (b->fruit != NULL) {
-            if (strcmp(b->fruit,westCheck->fruit) == 0
-            && westCheck->price > 0) {
-                if (westCheck->quantity > 0) {
-                    strcpy(selectedFruit,b->fruit);
-                    if (checkValidBuyer(b,selectedFruit) == BUYER) {
-                        break;
-                    } else if (checkValidBuyer(b,selectedFruit) == BUYER_ANYTHING) {
-                        break;
-                    }
-                }
-            } else if (strcmp("Anything",westCheck->fruit) == 0) {
-                strcpy(selectedFruit,b->fruit);
-                if (checkValidBuyer(b,selectedFruit) == BUYER_ANYTHING) {
-                    break;
-                }
-            }
-        } else if (b->fruit == NULL) {
-            if (strcmp(westCheck->fruit,locations[0].sellLocation) == 0) {
-                if (westCheck->quantity > 0) {
-                    strcpy(selectedFruit,westCheck->fruit);
-                    if (checkValidSeller(b,selectedFruit) == SELLER) {
-                        break;
-                    }
-                }
-            }
-        }
-
-        westCheck = westCheck->west;
-        westCounter++;
-    }
-
-    if (westCounter == 0 && eastCounter != 0) {
-        closest = eastCounter;
-    } else if (westCounter != 0 && eastCounter == 0) {
-        closest = westCounter*(-1);
-    } else if (westCounter != 0 && eastCounter != 0) {
-        if (westCounter < eastCounter) {
-            closest = westCounter*(-1);
-        } else if (westCounter > eastCounter) {
-            closest = eastCounter;
-        } else if (westCounter == eastCounter) {
-            closest = eastCounter;
-        }
-    }
-
-    return closest; */
 }
 
 // Checks if there is a valid buyer for a given fruit.
