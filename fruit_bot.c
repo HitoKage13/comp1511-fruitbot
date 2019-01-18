@@ -1,25 +1,30 @@
 // fruit_bot.c
 // Assignment 3, COMP1511 18s1: Fruit Bot
 //
-// This program by Jeremy Lim (z5209627) on INSERT-DATE-HERE
+// This program by Jeremy Lim (z5209627) on 03-06-2018
 //
 // Features:
 // - Creates a struct that calculates efficiency.
+// - Relate efficiency to optimal moves.
+// - Bot doesn't go into a loop when all the bots are trying
+// to buy from one location.
+// - Knows when to recharge electricity
+// - Calculates profit for overall quantity.
 //
-// To do list:
-// - Relate efficiency to optimal moves
-// - Make sure bot doesn't go into a loop
-// - Calculates profit for quantity and NOT per unit.
-//
-// Submitted 31/05 (11:24pm)
-// 0.44 average
+// Submitted 03/06 (7:24pm)
+// 0.22 average
 // Version 1.0.0: Assignment released.
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <assert.h>
 #include <string.h>
 
 #include "fruit_bot.h"
+
+// This is for the sort_efficiency function to give the struct array more
+// space to fill its buy/sell pairs.
+#define MAX_ARRAY_INPUT 10000
 
 // Defines for checkAction function (used for determining the actions
 // for a given turn).
@@ -39,6 +44,8 @@
 // there is a valid buyer)
 #define BUYER 9
 #define NO_BUYER 10
+// If there are no buyers available and the only option is to sell to
+// a location that accepts anything.
 #define BUYER_ANYTHING 11
 
 // Defines for checkValidSeller function (used for determining if
@@ -46,13 +53,21 @@
 #define SELLER 12
 #define NO_SELLER 13
 
+// Defines for sort_efficiency function (Directions)
 #define WEST 14
 #define EAST 15
+
+// If already at the location, but pointing west/east
 #define DEST_W 16
 #define DEST_E 17
 
+// Defines for checkValidElectricity function (used for determining if
+// there is a valid electricity seller)
 #define ELEC 18
 #define NO_ELEC 19
+// If the electricity seller's quantity is less than the critical electricity
+// amount (no point going there to recharge a small amount; usually
+// takes more battery getting there than the gain of recharging)
 #define NOT_WORTH_ELEC 20
 
 void print_player_name(void);
@@ -87,21 +102,21 @@ typedef struct _trading{
   struct _trading *next;
 } trading;
 
-void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS + 1]);
-void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS + 1]);
-void print_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS + 1], int i);
-void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS + 1], int i);
-void print_buy_efficiency (struct bot *b, struct _trading buying[MAX_LOCATIONS + 1], int i);
+void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_ARRAY_INPUT + 1]);
+void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_ARRAY_INPUT + 1]);
+void print_efficiency (struct bot *b, struct _efficiency locations[MAX_ARRAY_INPUT + 1], int i);
+void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_ARRAY_INPUT + 1], int i);
+void print_buy_efficiency (struct bot *b, struct _trading buying[MAX_ARRAY_INPUT + 1], int i);
 int closestAnything (struct bot *b, struct location *anythingName);
 int botCount (struct bot *b);
 int criticalElectricity (struct bot *b);
 int rechargeAmount (struct bot *b, int critical, int nearestBuyer);
 int checkAction(struct bot *b, int critical, int botCounter,
-struct _efficiency locations[MAX_LOCATIONS + 1], struct _trading selling[MAX_LOCATIONS + 1]);
+struct _efficiency locations[MAX_ARRAY_INPUT + 1], struct _trading selling[MAX_ARRAY_INPUT + 1]);
 int checkEnd (struct bot *b);
 int checkCosts (struct bot *b);
-int checkMoves(struct bot *b, int botCounter, struct _efficiency locations[MAX_LOCATIONS + 1],
-struct _trading selling[MAX_LOCATIONS + 1]);
+int checkMoves(struct bot *b, int botCounter, struct _efficiency locations[MAX_ARRAY_INPUT + 1],
+struct _trading selling[MAX_ARRAY_INPUT + 1]);
 int checkValidBuyer (struct bot *b, char selectedFruit[MAX_NAME_CHARS + 1]);
 int checkValidSeller (struct bot *b, char selectedFruit[MAX_NAME_CHARS + 1]);
 int checkValidElectricity (struct bot *b);
@@ -143,8 +158,8 @@ void print_player_name(void) {
 void print_move(struct bot *b) {
     // THE LINES BELOW IMPLEMENT A SIMPLE (USELESS) STRATEGY
     // REPLACE THEN WITH YOUR CODE
-    struct _efficiency locations[MAX_LOCATIONS + 1];
-    struct _trading selling[MAX_LOCATIONS + 1];
+    struct _efficiency locations[MAX_ARRAY_INPUT + 1];
+    struct _trading selling[MAX_ARRAY_INPUT + 1];
     struct location *current = b->location;
     char selectedFruit[MAX_NAME_CHARS + 1];
     struct location *anythingName = b->location;
@@ -168,9 +183,10 @@ void print_move(struct bot *b) {
     int recharge = rechargeAmount(b,criticalElec,move);
 
     int i = 0;
-    char fruitName[MAX_FRUIT_TYPES];
 
-    if (action == BUY_FRUIT || action == BUY_ELEC) {
+    if (action == COMPLETE) {
+        printf("Move 0\n");
+    } else if (action == BUY_FRUIT || action == BUY_ELEC) {
         printf("Buy ");
         if (action == BUY_FRUIT) {
             printf("%d\n",cost);
@@ -189,14 +205,59 @@ void print_move(struct bot *b) {
         } else if (action == MOVE_FRUIT_ANYTHING) {
             printf("%d\n",anything);
         }
-    } else if (action == COMPLETE) {
-        printf("Move 0\n");
     }
 
 }
 
 
 // ADD A COMMENT HERE EXPLAINING YOUR OVERALL TESTING STRATEGY
+/* I get most of the testing done through simulating 100s of games and
+looking for logic errors in the games. My logic debugging has been
+outlined through the functions I made to overcome these problems
+and ensured /most/ of my code is readable for myself (and others), which
+has helped me in looking for errors without the need of numerous
+print statements.
+
+I started my strategy by creating an efficiency table, that checks the
+profit over turns. I then bubblesorted the array of structs so the
+highest efficiency appears first.
+
+I test the actions that the bot takes, splitting them into
+buy, sell and move. If it has no fruit and isn't at the highest efficiency
+location, it will move. If it is at the location, it will buy the maximum
+amount it can carry. If it has fruit, the bot will try to move to the location
+where it can sell the fruit.
+
+I created the critical electricity capacity which helps for when I need to recharge.
+This is complemented by the checkValidElectricity function, which is used to see
+the possible electricity places in the world. When there are no electricity suppliers
+that are worth going to (e.g: it's useless to go 20 moves to charge 5 kJ of electricity,
+so it will skip recharging). I will also charge less based on how many turns are left
+to ensure I don't overcharge and waste the electricity.
+
+If there are 10 apple sellers and 30 bots trying to buy from it, everyone gets
+zero and since no info is passed between turns, those bots are stuck in a loop
+of buying, as there will still be quantity left. I accounted this through
+checking the bots in the location I am at, and if I am considering buying
+fruit, I will check the location->quantity/botCount and see if it is more than
+1 (as I will exit with at least 1 fruit). If I would get stuck, I look
+for my second-best buy/sell pair to go to.
+
+If all the fruit buyers are exhausted and I still have a piece of fruit remaining,
+I use the checkValidBuyer function to search for the nearest buyer that
+accepts "Anything" and calculates the distance from the current location,
+through the nearestRoute function.
+
+Finally, to check when to stop trading, in the unlikely chance that there are no
+buy/sell pair remaining, it will return "Complete" to the checkAction, signalling
+the bot to "Move 0" for the rest of the game.
+
+If there are two turns left of the game and the bot has no fruit, it will also
+stop as Buy-Move-Sell requires 3 turns to get done.
+
+TL;DR: I tested my logic errors while I did my assignment, there's probably
+some issues with multi-bot worlds but it's optimised as much as I can
+with the time I was given to do this assignment */
 
 void run_unit_tests(void) {
     // PUT YOUR UNIT TESTS HERE
@@ -207,11 +268,14 @@ void run_unit_tests(void) {
 
 // ADD YOUR FUNCTIONS HERE
 
-void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS + 1]) {
+// Note: Distance is the relative distance between buyer and seller, while
+// journey is the relative distance plus the distance between the bot
+// and the seller.
+void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_ARRAY_INPUT + 1]) {
     struct location *prev = b->location;
     struct location *check = prev;
     struct location *temp = prev;
-    struct _efficiency sortHolder[MAX_LOCATIONS + 1];
+    struct _efficiency sortHolder[MAX_ARRAY_INPUT + 1];
     int i = 0;
     int j = 0;
     int flag = 1;
@@ -377,11 +441,11 @@ void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS 
     /* print_efficiency(b,locations,i); */
 }
 
-void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS + 1]) {
+void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_ARRAY_INPUT + 1]) {
     struct location *prev = b->location;
     struct location *check = prev;
     struct location *temp = prev;
-    struct _trading sortHolder[MAX_LOCATIONS + 1];
+    struct _trading sortHolder[MAX_ARRAY_INPUT + 1];
     char selectedFruit[MAX_NAME_CHARS + 1];
     struct location *anythingName = b->location;
     int i = 0;
@@ -577,7 +641,8 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
     } */
 }
 
-void print_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS + 1], int i) {
+// Prints "Efficiency" for debugging
+void print_efficiency (struct bot *b, struct _efficiency locations[MAX_ARRAY_INPUT + 1], int i) {
     int j = 0;
     /* while (j < i) { */
         printf("Fruit:              %s\n",locations[j].fruit);
@@ -629,7 +694,8 @@ void print_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS
     } */
 }
 
-void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS + 1], int i) {
+// Prints "sell efficiency" for debugging
+void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_ARRAY_INPUT + 1], int i) {
     int j = 0;
     /* while (j < i) { */
         printf("Fruit:              %s\n",selling[j].fruit);
@@ -643,7 +709,7 @@ void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
     } */
 }
 
-/* void print_buy_efficiency (struct bot *b, struct _trading buying[MAX_LOCATIONS + 1], int i) {
+/* void print_buy_efficiency (struct bot *b, struct _trading buying[MAX_ARRAY_INPUT + 1], int i) {
     int j = 0;
     while (j < i) {
         printf("Fruit:              %s\n",buying[j].fruit);
@@ -657,6 +723,8 @@ void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
     }
 } */
 
+// Finds the closest location that can buy "Anything", to get rid
+// of excess fruit.
 int closestAnything (struct bot *b, struct location *anythingName) {
     struct location *current = b->location;
     struct location *westCheck = current;
@@ -682,6 +750,7 @@ int closestAnything (struct bot *b, struct location *anythingName) {
     return 0;
 }
 
+// Checks how many bots are at a given location to prevent an infinite loop.
 int botCount (struct bot *b) {
     struct bot_list *check = b->location->bots;
     int botCounter = 0;
@@ -713,9 +782,9 @@ int rechargeAmount (struct bot *b, int critical, int nearestBuyer) {
             } else {
                 recharge = b->battery_capacity - b->battery_level;
             }
-        } else if (b->turns_left <= 6) {
+        } else if (b->turns_left <= 10) {
             recharge = (b->battery_capacity - b->battery_level)/4;
-        } else if (b->turns_left <= 15) {
+        } else if (b->turns_left <= 25) {
             recharge = (b->battery_capacity - b->battery_level)/2;
         } else {
             recharge = b->battery_capacity - b->battery_level;
@@ -726,8 +795,8 @@ int rechargeAmount (struct bot *b, int critical, int nearestBuyer) {
 }
 
 // Checks what action to take
-int checkAction (struct bot *b, int critical, int botCounter, struct _efficiency locations[MAX_LOCATIONS + 1],
-struct _trading selling[MAX_LOCATIONS + 1]) {
+int checkAction (struct bot *b, int critical, int botCounter, struct _efficiency locations[MAX_ARRAY_INPUT + 1],
+struct _trading selling[MAX_ARRAY_INPUT + 1]) {
     struct location *check = b->location;
     char selectedFruit[MAX_NAME_CHARS + 1];
     int closestElectricity = nearestElectricity(b,critical);
@@ -784,7 +853,9 @@ struct _trading selling[MAX_LOCATIONS + 1]) {
         }
     } else if (b->fruit == NULL) {
         if (strcmp(check->name,locations[0].sellLocation) == 0 ||
-        strcmp(check->fruit,locations[0].fruit) == 0) {
+        strcmp(check->fruit,locations[0].fruit) == 0
+        || strcmp(check->name,locations[1].sellLocation) == 0 ||
+        strcmp(check->fruit,locations[1].fruit) == 0) {
             if ((check->quantity/botCounter) > 0
             && (check->price < 0 && check->quantity > 0)) {
                 return BUY_FRUIT;
@@ -802,10 +873,12 @@ int checkEnd (struct bot *b) {
     struct location *check = prev;
     int flag = 1;
 
+    // No fruit and turns left is 2 or less
     if (b->turns_left <= 2 && b->fruit == NULL) {
         return COMPLETE;
     }
 
+    // No battery and no fruit
     if (b->battery_level == 0 && b->fruit == NULL) {
         return COMPLETE;
     }
@@ -888,8 +961,8 @@ int checkCosts (struct bot *b) {
 }
 
 // Checks how many moves to take.
-int checkMoves(struct bot *b, int botCounter, struct _efficiency locations[MAX_LOCATIONS + 1],
-    struct _trading selling[MAX_LOCATIONS + 1]) {
+int checkMoves(struct bot *b, int botCounter, struct _efficiency locations[MAX_ARRAY_INPUT + 1],
+    struct _trading selling[MAX_ARRAY_INPUT + 1]) {
     struct location *current = b->location;
     struct location *westCheck = current;
     struct location *eastCheck = current;
@@ -908,13 +981,32 @@ int checkMoves(struct bot *b, int botCounter, struct _efficiency locations[MAX_L
         strcpy(selectedFruit,b->fruit);
         if (checkValidBuyer(b,selectedFruit) == BUYER_ANYTHING) {
             move = closestAnything(b,anythingName);
+            return move;
+        } else if (strcmp(current->name,selling[0].buyLocation) == 0 && current->quantity/botCounter < 1) {
+            // selling[1] is for backup in case the first locations
+            // is an infinite loop.
+            if (strcmp(selling[2].fruit,b->fruit) == 0) {
+                while (strcmp(buyDestination->name,selling[2].buyLocation) != 0) {
+                    buyDestination = buyDestination->east;
+                }
+                move = nearestRoute(current,buyDestination);
+                return move;
+            // locations[1] is for backup in case the first locations
+            // is an infinite loop.
+        } else if (strcmp(locations[2].fruit,b->fruit) == 0) {
+                while (strcmp(buyDestination->name,locations[2].buyLocation) != 0) {
+                    buyDestination = buyDestination->east;
+                }
+                move = nearestRoute(current,buyDestination);
+                return move;
+            }
         } else {
             while (strcmp(buyDestination->name,selling[0].buyLocation) != 0) {
                 buyDestination = buyDestination->east;
             }
             move = nearestRoute(current,buyDestination);
+            return move;
         }
-        return move;
     } else if (b->fruit == NULL) {
         while (strcmp(sellDestination->name,locations[0].sellLocation) != 0) {
             sellDestination = sellDestination->east;
@@ -1080,6 +1172,9 @@ int checkValidSeller (struct bot *b, char selectedFruit[MAX_NAME_CHARS + 1]) {
     return NO_SELLER;
 }
 
+// Checks if there is a valid electricity seller.
+// If the electricity place has less than critical amount, it is
+// normally not worth buying from.
 int checkValidElectricity (struct bot *b) {
     struct location *current = b->location;
     struct location *check = current;
@@ -1114,6 +1209,7 @@ int checkValidElectricity (struct bot *b) {
 
     return NO_ELEC;
 }
+
 // Checks where the nearest electricity location is
 int nearestElectricity(struct bot *b, int critical) {
     // PUT YOUR CODE HERE
@@ -1191,6 +1287,7 @@ int nearestElectricity(struct bot *b, int critical) {
     return closest;
 }
 
+// Nearest route from a given location to another.
 int nearestRoute(struct location *a, struct location *b) {
     // PUT YOUR CODE HERE
     struct location *current = a;
