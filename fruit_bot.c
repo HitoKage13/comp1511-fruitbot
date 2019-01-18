@@ -145,15 +145,9 @@ void print_move(struct bot *b) {
     struct _efficiency locations[MAX_LOCATIONS + 1];
     struct _trading selling[MAX_LOCATIONS + 1];
     struct location *current = b->location;
-    char selectedFruit[MAX_NAME_CHARS + 1];
 
     sort_efficiency(b,locations);
-    if (b->fruit != NULL) {
-        strcpy(selectedFruit,b->fruit);
-        if (checkValidBuyer(b,selectedFruit) == BUYER) {
-            sort_trade_efficiency(b,selling);
-        }
-    }
+    sort_trade_efficiency(b,selling);
 
     int botCounter = botCount(b);
     int criticalElec = criticalElectricity(b);
@@ -176,8 +170,7 @@ void print_move(struct bot *b) {
         }
     } else if (action == SELL_FRUIT) {
         printf("Sell %d\n",cost);
-    } else if (action == MOVE_FRUIT || action == MOVE_ELEC
-    || action == MOVE_FRUIT_ANYTHING) {
+    } else if (action == MOVE_FRUIT || action == MOVE_ELEC || action == MOVE_FRUIT_ANYTHING) {
         printf("Move ");
         if (action == MOVE_FRUIT) {
             printf("%d\n",move);
@@ -347,7 +340,7 @@ void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS 
         }
     }
 
-    /* print_efficiency(b,locations,i); */
+    print_efficiency(b,locations,i);
 }
 
 void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS + 1]) {
@@ -440,7 +433,7 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
             }
         }
 
-        /* print_sell_efficiency(b,selling,i); */
+        print_sell_efficiency(b,selling,i);
     } /* else if (b->fruit == NULL) {
         while (!(check == prev && flag == 0)) {
             flag = 0;
@@ -516,7 +509,7 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
 
 void print_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS + 1], int i) {
     int j = 0;
-    while (j < i) {
+    /* while (j < i) { */
         printf("Fruit:              %s\n",locations[j].fruit);
         printf("Profit:             %d\n",locations[j].profit);
         printf("Seller:             %s\n",locations[j].sellLocation);
@@ -562,13 +555,13 @@ void print_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS
         }
         printf("Efficiency:         %.1lf\n",locations[j].efficiency);
         printf("\n");
-        j++;
-    }
+        /* j++;
+    } */
 }
 
 void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS + 1], int i) {
     int j = 0;
-    while (j < i) {
+    /* while (j < i) { */
         printf("Fruit:              %s\n",selling[j].fruit);
         printf("Profit:             %d\n",selling[j].profit);
         printf("Buyer:              %s\n",selling[j].buyLocation);
@@ -576,8 +569,10 @@ void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
         printf("Dist:               %d\n",selling[j].distance);
         printf("Efficiency:         %.1lf\n",selling[j].efficiency);
         printf("\n");
-        j++;
-    }
+
+        printf("i = %d\n",i);
+        /* j++;
+    } */
 }
 
 /* void print_buy_efficiency (struct bot *b, struct _trading buying[MAX_LOCATIONS + 1], int i) {
@@ -727,10 +722,6 @@ int checkEnd (struct bot *b) {
     int flag = 1;
 
     if (b->turns_left <= 2 && b->fruit == NULL) {
-        return COMPLETE;
-    }
-
-    if (b->battery_level == 0 && b->fruit == NULL) {
         return COMPLETE;
     }
 
