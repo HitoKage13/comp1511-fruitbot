@@ -11,8 +11,8 @@
 // - Make sure bot doesn't go into a loop
 // - Calculates profit for quantity and NOT per unit.
 //
-// Submitted 31/05 (~2pm)
-// 0.28 average
+// Submitted 31/05 (11:24pm)
+// 0.44 average
 // Version 1.0.0: Assignment released.
 
 #include <stdio.h>
@@ -53,6 +53,7 @@
 
 #define ELEC 18
 #define NO_ELEC 19
+#define NOT_WORTH_ELEC 20
 
 void print_player_name(void);
 void print_move(struct bot *b);
@@ -91,7 +92,7 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
 void print_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS + 1], int i);
 void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS + 1], int i);
 void print_buy_efficiency (struct bot *b, struct _trading buying[MAX_LOCATIONS + 1], int i);
-int closestAnything (struct bot *b);
+int closestAnything (struct bot *b, struct location *anythingName);
 int botCount (struct bot *b);
 int criticalElectricity (struct bot *b);
 int rechargeAmount (struct bot *b, int critical, int nearestBuyer);
@@ -99,7 +100,7 @@ int checkAction(struct bot *b, int critical, int botCounter,
 struct _efficiency locations[MAX_LOCATIONS + 1], struct _trading selling[MAX_LOCATIONS + 1]);
 int checkEnd (struct bot *b);
 int checkCosts (struct bot *b);
-int checkMoves(struct bot *b, struct _efficiency locations[MAX_LOCATIONS + 1],
+int checkMoves(struct bot *b, int botCounter, struct _efficiency locations[MAX_LOCATIONS + 1],
 struct _trading selling[MAX_LOCATIONS + 1]);
 int checkValidBuyer (struct bot *b, char selectedFruit[MAX_NAME_CHARS + 1]);
 int checkValidSeller (struct bot *b, char selectedFruit[MAX_NAME_CHARS + 1]);
@@ -145,17 +146,25 @@ void print_move(struct bot *b) {
     struct _efficiency locations[MAX_LOCATIONS + 1];
     struct _trading selling[MAX_LOCATIONS + 1];
     struct location *current = b->location;
+    char selectedFruit[MAX_NAME_CHARS + 1];
+    struct location *anythingName = b->location;
 
     sort_efficiency(b,locations);
-    sort_trade_efficiency(b,selling);
+
+    if (b->fruit != NULL) {
+        strcpy(selectedFruit,b->fruit);
+        if (checkValidBuyer(b,selectedFruit) == BUYER) {
+            sort_trade_efficiency(b,selling);
+        }
+    }
 
     int botCounter = botCount(b);
     int criticalElec = criticalElectricity(b);
     int chargeDist = nearestElectricity(b,criticalElec);
     int action = checkAction(b,criticalElec,botCounter,locations,selling);
     int cost = checkCosts(b);
-    int move = checkMoves(b,locations,selling);
-    int anything = closestAnything(b);
+    int move = checkMoves(b,botCounter,locations,selling);
+    int anything = closestAnything(b,anythingName);
     int recharge = rechargeAmount(b,criticalElec,move);
 
     int i = 0;
@@ -170,7 +179,8 @@ void print_move(struct bot *b) {
         }
     } else if (action == SELL_FRUIT) {
         printf("Sell %d\n",cost);
-    } else if (action == MOVE_FRUIT || action == MOVE_ELEC || action == MOVE_FRUIT_ANYTHING) {
+    } else if (action == MOVE_FRUIT || action == MOVE_ELEC
+    || action == MOVE_FRUIT_ANYTHING) {
         printf("Move ");
         if (action == MOVE_FRUIT) {
             printf("%d\n",move);
@@ -211,6 +221,8 @@ void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS 
     int route = 0;
     int sortCounter = 0;
     int turnCheck = 2;
+    int sellQuantity = 0;
+    int buyQuantity = 0;
 
     while (!(check == prev && flag == 0)) {
         flag = 0;
@@ -230,9 +242,20 @@ void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS 
                         strcpy(locations[i].buyLocation,temp->name);
                     }
                     strcpy(locations[i].fruit,check->fruit);
-                    locations[i].profit = check->price + temp->price;
+                    if (check->quantity >= b->maximum_fruit_kg) {
+                        sellQuantity = b->maximum_fruit_kg;
+                    } else if (check->quantity < b->maximum_fruit_kg) {
+                        sellQuantity = check->quantity;
+                    }
+                    if (temp->quantity >= b->maximum_fruit_kg) {
+                        buyQuantity = b->maximum_fruit_kg;
+                    } else if (temp->quantity < b->maximum_fruit_kg) {
+                        buyQuantity = check->quantity;
+                    }
+                    locations[i].profit = check->price*(sellQuantity)
+                    + temp->price*(buyQuantity);
                     locations[i].distance = distanceCounter;
-                    locations[i].journey = journeyCounter + distanceCounter;
+                    locations[i].journey = journeyCounter;
                     if (strcmp(check->name,temp->name) == 0) {
                         locations[i].direction = DEST_E;
                     } else {
@@ -245,7 +268,7 @@ void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS 
                     }
                     locations[i].turns = turnCheck + (locations[i].journey/b->maximum_move);
                     if (check->quantity > 0) {
-                        locations[i].efficiency = (locations[i].profit/locations[i].turns)*100;
+                        locations[i].efficiency = (locations[i].profit/locations[i].turns)*10;
                     } else if (check->quantity == 0) {
                         locations[i].efficiency = 0;
                     }
@@ -286,9 +309,20 @@ void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS 
                         strcpy(locations[i].buyLocation,temp->name);
                     }
                     strcpy(locations[i].fruit,check->fruit);
-                    locations[i].profit = check->price + temp->price;
+                    if (check->quantity >= b->maximum_fruit_kg) {
+                        sellQuantity = b->maximum_fruit_kg;
+                    } else if (check->quantity < b->maximum_fruit_kg) {
+                        sellQuantity = check->quantity;
+                    }
+                    if (temp->quantity >= b->maximum_fruit_kg) {
+                        buyQuantity = b->maximum_fruit_kg;
+                    } else if (temp->quantity < b->maximum_fruit_kg) {
+                        buyQuantity = check->quantity;
+                    }
+                    locations[i].profit = check->price*(sellQuantity)
+                    + temp->price*(buyQuantity);
                     locations[i].distance = distanceCounter;
-                    locations[i].journey = journeyCounter + distanceCounter;
+                    locations[i].journey = journeyCounter;
                     if (strcmp(check->name,temp->name) == 0) {
                         locations[i].direction = DEST_W;
                     } else {
@@ -301,7 +335,7 @@ void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS 
                     }
                     locations[i].turns = turnCheck + (locations[i].journey/b->maximum_move);
                     if (check->quantity > 0) {
-                        locations[i].efficiency = (locations[i].profit/locations[i].turns)*100;
+                        locations[i].efficiency = (locations[i].profit/locations[i].turns)*10;
                     } else if (check->quantity == 0) {
                         locations[i].efficiency = 0;
                     }
@@ -340,7 +374,7 @@ void sort_efficiency (struct bot *b, struct _efficiency locations[MAX_LOCATIONS 
         }
     }
 
-    print_efficiency(b,locations,i);
+    /* print_efficiency(b,locations,i); */
 }
 
 void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS + 1]) {
@@ -348,6 +382,8 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
     struct location *check = prev;
     struct location *temp = prev;
     struct _trading sortHolder[MAX_LOCATIONS + 1];
+    char selectedFruit[MAX_NAME_CHARS + 1];
+    struct location *anythingName = b->location;
     int i = 0;
     int j = 0;
     int flag = 1;
@@ -357,8 +393,32 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
     int route = 0;
     int sortCounter = 0;
     int turnCheck = 2;
+    int sellQuantity = 0;
 
-    if (b->fruit != NULL) {
+    strcpy(selectedFruit,b->fruit);
+    if (b->fruit != NULL && checkValidBuyer(b,selectedFruit) == BUYER_ANYTHING) {
+        int anything = closestAnything(b,anythingName);
+        strcpy(selling[i].fruit,b->fruit);
+        strcpy(selling[i].buyLocation,anythingName->name);
+        if (anythingName->quantity >= b->maximum_fruit_kg) {
+            sellQuantity = b->maximum_fruit_kg;
+        } else if (anythingName->quantity < b->maximum_fruit_kg) {
+            sellQuantity = check->quantity;
+        }
+        selling[i].profit = check->price*(sellQuantity);
+        route = nearestRoute(prev,anythingName);
+        if (route < 0) {
+            route = route*(-1);
+        }
+        selling[i].distance = route;
+        if (strcmp(prev->name,selling[i].buyLocation) == 0) {
+            turnCheck--;
+        } else if (selling[i].distance % b->maximum_move > 0) {
+            turnCheck++;
+        }
+        selling[i].turns = turnCheck + (selling[i].distance/b->maximum_move);
+        selling[i].efficiency = (selling[i].profit/selling[i].turns)*1000;
+    } else if (b->fruit != NULL && checkValidBuyer(b,selectedFruit) == BUYER) {
         while (!(check == prev && flag == 0)) {
             flag = 0;
             turnCheck = 2;
@@ -366,7 +426,12 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
             check->quantity > 0)) {
                 strcpy(selling[i].fruit,check->fruit);
                 strcpy(selling[i].buyLocation,check->name);
-                selling[i].profit = check->price;
+                if (check->quantity >= b->maximum_fruit_kg) {
+                    sellQuantity = b->maximum_fruit_kg;
+                } else if (check->quantity < b->maximum_fruit_kg) {
+                    sellQuantity = check->quantity;
+                }
+                selling[i].profit = check->price*(sellQuantity);
                 route = nearestRoute(prev,check);
                 if (route < 0) {
                     route = route*(-1);
@@ -378,7 +443,7 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
                     turnCheck++;
                 }
                 selling[i].turns = turnCheck + (selling[i].distance/b->maximum_move);
-                selling[i].efficiency = (selling[i].profit/selling[i].turns)*100;
+                selling[i].efficiency = (selling[i].profit/selling[i].turns)*10;
                 i++;
             }
 
@@ -394,7 +459,12 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
             check->quantity > 0)) {
                 strcpy(selling[i].fruit,check->fruit);
                 strcpy(selling[i].buyLocation,check->name);
-                selling[i].profit = check->price;
+                if (check->quantity >= b->maximum_fruit_kg) {
+                    sellQuantity = b->maximum_fruit_kg;
+                } else if (check->quantity < b->maximum_fruit_kg) {
+                    sellQuantity = check->quantity;
+                }
+                selling[i].profit = check->price*(sellQuantity);
                 route = nearestRoute(prev,check);
                 if (route < 0) {
                     route = route*(-1);
@@ -406,7 +476,7 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
                     turnCheck++;
                 }
                 selling[i].turns = turnCheck + (selling[i].distance/b->maximum_move);
-                selling[i].efficiency = (selling[i].profit/selling[i].turns)*100;
+                selling[i].efficiency = (selling[i].profit/selling[i].turns)*10;
                 i++;
             }
 
@@ -433,7 +503,7 @@ void sort_trade_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
             }
         }
 
-        print_sell_efficiency(b,selling,i);
+        /* print_sell_efficiency(b,selling,i); */
     } /* else if (b->fruit == NULL) {
         while (!(check == prev && flag == 0)) {
             flag = 0;
@@ -569,8 +639,6 @@ void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
         printf("Dist:               %d\n",selling[j].distance);
         printf("Efficiency:         %.1lf\n",selling[j].efficiency);
         printf("\n");
-
-        printf("i = %d\n",i);
         /* j++;
     } */
 }
@@ -585,13 +653,11 @@ void print_sell_efficiency (struct bot *b, struct _trading selling[MAX_LOCATIONS
         printf("Dist:               %d\n",buying[j].distance);
         printf("Efficiency:         %.1lf\n",buying[j].efficiency);
         printf("\n");
-
-        printf("i = %d\n",i);
         j++;
     }
 } */
 
-int closestAnything (struct bot *b) {
+int closestAnything (struct bot *b, struct location *anythingName) {
     struct location *current = b->location;
     struct location *westCheck = current;
     struct location *eastCheck = current;
@@ -605,8 +671,10 @@ int closestAnything (struct bot *b) {
         eastCounter++;
 
         if (strcmp(westCheck->fruit,"Anything") == 0) {
+            anythingName = westCheck;
             return westCounter;
-        } else if (strcmp(eastCheck->fruit,"Anything") != 0) {
+        } else if (strcmp(eastCheck->fruit,"Anything") == 0) {
+            anythingName = eastCheck;
             return eastCounter;
         }
     }
@@ -668,22 +736,33 @@ struct _trading selling[MAX_LOCATIONS + 1]) {
         return COMPLETE;
     }
 
-    if (closestElectricity <= 0 && (locations[0].direction == WEST
-    || locations[0].direction == DEST_W)) {
-        if (b->battery_level <= critical && checkValidElectricity(b) == ELEC) {
-            if (strcmp(check->fruit,"Electricity") == 0) {
-                return BUY_ELEC;
-            } else {
-                return MOVE_ELEC;
+    if (b->battery_level <= critical) {
+        if (closestElectricity <= 0 && (locations[0].direction == WEST
+        || locations[0].direction == DEST_W)) {
+            if (checkValidElectricity(b) == ELEC) {
+                if (strcmp(check->fruit,"Electricity") == 0) {
+                    return BUY_ELEC;
+                } else {
+                    return MOVE_ELEC;
+                }
             }
-        }
-    } else if (closestElectricity >= 0 && (locations[0].direction == EAST
-    || locations[0].direction == DEST_E)) {
-        if (b->battery_level <= critical && checkValidElectricity(b) == ELEC) {
-            if (strcmp(check->fruit,"Electricity") == 0) {
-                return BUY_ELEC;
-            } else {
-                return MOVE_ELEC;
+        } else if (closestElectricity >= 0 && (locations[0].direction == EAST
+        || locations[0].direction == DEST_E)) {
+            if (checkValidElectricity(b) == ELEC) {
+                if (strcmp(check->fruit,"Electricity") == 0) {
+                    return BUY_ELEC;
+                } else {
+                    return MOVE_ELEC;
+                }
+            }
+        } else if (closestElectricity <= 2*(b->maximum_move) ||
+        closestElectricity*(-1) <= 2*(b->maximum_move)) {
+            if (checkValidElectricity(b) == ELEC) {
+                if (strcmp(check->fruit,"Electricity") == 0) {
+                    return BUY_ELEC;
+                } else {
+                    return MOVE_ELEC;
+                }
             }
         }
     }
@@ -695,15 +774,17 @@ struct _trading selling[MAX_LOCATIONS + 1]) {
             return SELL_FRUIT;
         } else if (strcmp("Anything",check->fruit) != 0 &&
         checkValidBuyer(b,selectedFruit) == BUYER_ANYTHING) {
-                return MOVE_FRUIT_ANYTHING;
-        } else if (strcmp(check->name,selling[0].buyLocation) == 0) {
+            return MOVE_FRUIT_ANYTHING;
+        } else if (strcmp(check->name,selling[0].buyLocation) == 0 ||
+        strcmp(check->fruit,selling[0].fruit) == 0) {
             if ((check->quantity/botCounter) > 0
             && (check->price > 0 && check->quantity > 0)) {
                 return SELL_FRUIT;
             }
         }
     } else if (b->fruit == NULL) {
-        if (strcmp(check->name,locations[0].sellLocation) == 0) {
+        if (strcmp(check->name,locations[0].sellLocation) == 0 ||
+        strcmp(check->fruit,locations[0].fruit) == 0) {
             if ((check->quantity/botCounter) > 0
             && (check->price < 0 && check->quantity > 0)) {
                 return BUY_FRUIT;
@@ -722,6 +803,10 @@ int checkEnd (struct bot *b) {
     int flag = 1;
 
     if (b->turns_left <= 2 && b->fruit == NULL) {
+        return COMPLETE;
+    }
+
+    if (b->battery_level == 0 && b->fruit == NULL) {
         return COMPLETE;
     }
 
@@ -803,8 +888,8 @@ int checkCosts (struct bot *b) {
 }
 
 // Checks how many moves to take.
-int checkMoves(struct bot *b, struct _efficiency locations[MAX_LOCATIONS + 1],
-struct _trading selling[MAX_LOCATIONS + 1]) {
+int checkMoves(struct bot *b, int botCounter, struct _efficiency locations[MAX_LOCATIONS + 1],
+    struct _trading selling[MAX_LOCATIONS + 1]) {
     struct location *current = b->location;
     struct location *westCheck = current;
     struct location *eastCheck = current;
@@ -814,6 +899,7 @@ struct _trading selling[MAX_LOCATIONS + 1]) {
     int closest = 0;
     char selectedFruit[MAX_NAME_CHARS + 1];
     int move = 0;
+    struct location *anythingName = b->location;
 
     struct location *buyDestination = current;
     struct location *sellDestination = current;
@@ -821,7 +907,7 @@ struct _trading selling[MAX_LOCATIONS + 1]) {
     if (b->fruit != NULL) {
         strcpy(selectedFruit,b->fruit);
         if (checkValidBuyer(b,selectedFruit) == BUYER_ANYTHING) {
-            move = closestAnything(b);
+            move = closestAnything(b,anythingName);
         } else {
             while (strcmp(buyDestination->name,selling[0].buyLocation) != 0) {
                 buyDestination = buyDestination->east;
@@ -998,13 +1084,28 @@ int checkValidElectricity (struct bot *b) {
     struct location *current = b->location;
     struct location *check = current;
     int flag = 1;
+    int critical = (b->battery_capacity)/3;
+
+    while (!(current == check && flag == 0)) {
+        flag = 0;
+
+        if (strcmp(check->fruit, "Electricity") == 0) {
+            if (check->quantity > critical) {
+                return ELEC;
+            }
+        }
+
+        check = check->east;
+    }
+
+    flag = 1;
 
     while (!(current == check && flag == 0)) {
         flag = 0;
 
         if (strcmp(check->fruit, "Electricity") == 0) {
             if (check->quantity > 0) {
-                return ELEC;
+                return NOT_WORTH_ELEC;
             }
         }
 
